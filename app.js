@@ -8,8 +8,8 @@
    ══════════════════════════════════════════════════════════════ */
 
 const CONFIG = {
-  name: "smora",
-  adminPass: "smora2026",        // change this
+  name: "RyzeBooth",
+  adminPass: "ryze2026",        // change this
   discordEndpoint: "/api/discord", // Vercel function; leave as is
   defaultCaption: "",
   maxShots: 8
