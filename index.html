@@ -2,1254 +2,526 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>RyzeBooth — Photo Booth</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#141013">
+<meta name="description" content="Take your own photo strip, decorate it, and save it to your device.">
+<title>smora — photo booth</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- PeerJS powers the "use another device as a camera" QR feature (peer-to-peer video, no server code needed) -->
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-
-<script>
-/* ═══════════════════════════════════════════════════════════════════
-   ⚙️  SETTINGS — this is the only part you need to edit.
-   ═══════════════════════════════════════════════════════════════════
-
-   1. Paste your Discord webhook URL between the quotes below.
-      Server Settings → Integrations → Webhooks → New Webhook → Copy URL
-
-   2. Keep this file private. Anyone who can read this file can post
-      to your Discord channel. Do NOT upload it to a public website
-      or a public GitHub repo.
-
-   Leave it empty ("") and the "Send to Discord" button simply hides
-   itself — everything else still works.
-
-   3. Every finished strip is now auto-saved to Discord the moment the
-      last photo is taken (a raw, undecorated backup), as long as the
-      webhook above is set. Guests can still send the decorated final
-      version manually from the Share step.
-
-   4. "Use another device as a camera" (the QR option in Step 2) needs
-      this file to be hosted at a real URL that both the booth screen
-      and the guest's phone can open (e.g. GitHub Pages, Netlify, or
-      any web host). It will NOT work if you just double-click this
-      file and open it from your computer, because the phone has no
-      way to load a local file:// page. It uses the free PeerJS cloud
-      relay for connecting devices — no backend of your own required.
-*/
-const DISCORD_WEBHOOK = "";
-
-const BOOTH = {
-  name:      "AuraBooth",          // shown in the header
-  botName:   "AuraBooth 📸",       // name the photos are posted under in Discord
-  message:   "Fresh from the booth ✨", // text posted with each photo
-  defaultCaption: "",              // pre-filled caption on the strip
-};
-/* ═══════════════════════════════════════════════════════════════════ */
-</script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
 <style>
 :root{
-  --plum:#2A1A33; --plum-deep:#1B1023; --plum-soft:#3B2747;
-  --cream:#FFF4E4; --cherry:#E23E57; --mint:#5FD6A8; --sun:#FFC24B; --lilac:#C9A7E8;
-  --ink:#231A2B; --ink-soft:#6B5C77;
-  --page:var(--plum-deep); --panel:var(--cream); --text:var(--ink); --muted:var(--ink-soft);
-  --edge:3px solid var(--ink);
-  --drop:0 5px 0 rgba(0,0,0,.30);
-  --r:18px;
+  --bg:#141013;
+  --bg-2:#1A1418;
+  --card:#1C171B;
+  --card-2:#221C21;
+  --line:rgba(255,255,255,.08);
+  --line-2:rgba(255,255,255,.14);
+  --text:#FFFFFF;
+  --muted:#A9A0A5;
+  --dim:#6E656B;
+  --pink:#F2A0BC;
+  --pink-deep:#E77CA1;
+  --good:#7BD9A8;
+  --bad:#FF7A85;
+  --r-lg:22px;
+  --r-md:14px;
+  --r-sm:10px;
+  --pad:clamp(16px,4vw,34px);
+  --head:'Plus Jakarta Sans',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
 }
-[data-theme="day"]{ --page:#FFEAD6; --panel:#FFFDF8; }
 
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{
-  font-family:Outfit,system-ui,-apple-system,"Segoe UI",sans-serif;
-  background:var(--page); color:var(--text);
-  background-image:
-    radial-gradient(circle at 12% 8%, rgba(226,62,87,.28), transparent 45%),
-    radial-gradient(circle at 88% 4%, rgba(95,214,168,.20), transparent 42%),
-    radial-gradient(circle at 50% 100%, rgba(201,167,232,.22), transparent 55%),
-    radial-gradient(rgba(255,255,255,.055) 1.4px, transparent 1.4px);
-  background-size:auto,auto,auto,16px 16px;
-  background-attachment:fixed;
+  font-family:var(--body);
+  background:var(--bg);
+  color:var(--text);
+  min-height:100dvh;
+  overflow-x:hidden;
   -webkit-font-smoothing:antialiased;
-  padding-bottom:3rem;
+  padding-bottom:env(safe-area-inset-bottom);
 }
-[data-theme="day"] body{background-image:
-  radial-gradient(circle at 12% 8%, rgba(226,62,87,.18), transparent 45%),
-  radial-gradient(circle at 88% 4%, rgba(95,214,168,.20), transparent 42%),
-  radial-gradient(rgba(35,26,43,.06) 1.4px, transparent 1.4px);
-  background-size:auto,auto,16px 16px;}
-
-h1,h2,h3,.display{font-family:Fredoka,Outfit,sans-serif;font-weight:600;letter-spacing:-.01em;line-height:1.1}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(900px 520px at 12% -8%, rgba(242,160,188,.10), transparent 62%),
+    radial-gradient(700px 480px at 92% 6%, rgba(160,130,220,.07), transparent 60%);
+}
+img,video,canvas{max-width:100%;display:block}
 button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer;background:none;border:none}
-:focus-visible{outline:3px solid var(--sun);outline-offset:2px;border-radius:8px}
+button{background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--pink);outline-offset:3px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
-.wrap{max-width:1120px;margin:0 auto;padding:0 clamp(.85rem,3vw,1.75rem)}
-
-/* ── header ─────────────────────────────────────────── */
-header{padding:clamp(1rem,3vw,1.6rem) 0 .4rem}
-.bar{display:flex;align-items:center;gap:.75rem}
-.logo{
-  width:46px;height:46px;flex:none;border-radius:14px;background:var(--cherry);
-  border:var(--edge);box-shadow:var(--drop);display:grid;place-items:center;font-size:1.35rem;
-  transform:rotate(-4deg)
+/* ── top bar ─────────────────────────────── */
+.top{
+  position:sticky;top:0;z-index:40;
+  background:rgba(20,16,19,.82);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+  padding-top:env(safe-area-inset-top);
 }
-.brand h1{font-size:clamp(1.3rem,4vw,1.7rem);color:var(--cream)}
-[data-theme="day"] .brand h1{color:var(--ink)}
-.brand p{font-size:.78rem;color:rgba(255,244,228,.62);margin-top:2px}
-[data-theme="day"] .brand p{color:var(--ink-soft)}
+.bar{
+  max-width:1180px;margin:0 auto;
+  padding:12px var(--pad);
+  display:flex;align-items:center;gap:14px;
+}
+.brand{
+  font-family:var(--head);font-weight:800;font-size:17px;letter-spacing:-.02em;
+  display:flex;align-items:center;gap:9px;
+}
+.brand i{
+  width:26px;height:26px;border-radius:8px;display:grid;place-items:center;
+  background:var(--pink);color:#2B1520;font-style:normal;font-size:13px;
+}
 .bar .spacer{flex:1}
-.chip-btn{
-  width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:1.05rem;
-  background:rgba(255,244,228,.10);border:2px solid rgba(255,244,228,.22);color:var(--cream);
-  transition:transform .15s, background .15s
+.count{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.iconbtn{
+  width:34px;height:34px;border-radius:50%;border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--muted);transition:.18s;flex:none;
 }
-[data-theme="day"] .chip-btn{background:rgba(35,26,43,.06);border-color:rgba(35,26,43,.18);color:var(--ink)}
-.chip-btn:hover{transform:translateY(-2px);background:rgba(255,244,228,.2)}
-.lang-wrap{position:relative}
-.lang-menu{
-  position:absolute;right:0;top:50px;z-index:60;width:172px;padding:.35rem;
-  background:var(--panel);border:var(--edge);border-radius:14px;box-shadow:var(--drop);display:none
-}
-.lang-menu.open{display:block}
-.lang-menu button{display:block;width:100%;text-align:left;padding:.5rem .7rem;border-radius:9px;font-size:.9rem}
-.lang-menu button:hover{background:rgba(226,62,87,.12)}
-.lang-menu button[aria-current="true"]{background:var(--sun);font-weight:600}
+.iconbtn:hover{border-color:var(--line-2);color:var(--text)}
+.iconbtn.on{background:var(--pink);border-color:var(--pink);color:#2B1520}
+.track{height:3px;background:rgba(255,255,255,.06)}
+.fill{height:100%;width:25%;background:var(--pink);border-radius:0 3px 3px 0;transition:width .45s cubic-bezier(.4,0,.2,1)}
 
-/* ── step rail ──────────────────────────────────────── */
-.rail{display:flex;align-items:flex-start;gap:0;margin:1.4rem 0 1.5rem}
-.stepbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:.42rem;position:relative;padding-top:4px}
-.stepbtn::before,.stepbtn::after{
-  content:"";position:absolute;top:22px;height:3px;background:rgba(255,244,228,.20);width:50%
-}
-[data-theme="day"] .stepbtn::before,[data-theme="day"] .stepbtn::after{background:rgba(35,26,43,.14)}
-.stepbtn::before{left:0}.stepbtn::after{right:0}
-.stepbtn:first-child::before,.stepbtn:last-child::after{display:none}
-.stepbtn.done::before,.stepbtn.done::after,.stepbtn.active::before{background:var(--mint)}
-.dot{
-  position:relative;z-index:2;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
-  border:var(--edge);background:var(--panel);font-family:Fredoka,sans-serif;font-weight:600;font-size:1rem;
-  box-shadow:var(--drop);transition:transform .18s
-}
-.stepbtn.active .dot{background:var(--sun);transform:scale(1.14)}
-.stepbtn.done .dot{background:var(--mint)}
-.stepbtn span{
-  font-size:.76rem;font-weight:500;color:rgba(255,244,228,.58);text-align:center
-}
-[data-theme="day"] .stepbtn span{color:var(--ink-soft)}
-.stepbtn.active span,.stepbtn.done span{color:var(--cream)}
-[data-theme="day"] .stepbtn.active span,[data-theme="day"] .stepbtn.done span{color:var(--ink)}
-.stepbtn:disabled{cursor:not-allowed}
+/* ── layout ──────────────────────────────── */
+main{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:clamp(26px,6vw,60px) var(--pad) 60px}
+.step{display:none;animation:in .38s ease both}
+.step.on{display:block}
+@keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
-/* ── panels ─────────────────────────────────────────── */
-.panel{
-  background:var(--panel);border:var(--edge);border-radius:var(--r);box-shadow:var(--drop);
-  padding:clamp(1rem,3vw,1.5rem)
+.eyebrow{
+  display:inline-block;padding:8px 17px;border-radius:99px;
+  border:1px solid var(--line-2);background:rgba(255,255,255,.04);
+  font-family:var(--head);font-weight:700;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:#EADDE3;
 }
-.panel + .panel{margin-top:1rem}
-.step{display:none}
-.step.on{display:block;animation:pop .28s cubic-bezier(.34,1.3,.64,1)}
-@keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.lede{margin-bottom:1.1rem}
-.lede h2{font-size:clamp(1.25rem,4vw,1.55rem)}
-.lede p{color:var(--muted);font-size:.92rem;margin-top:.3rem;max-width:56ch}
-
-.cols{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:1rem;align-items:start}
-@media(max-width:860px){.cols{grid-template-columns:1fr}}
-
-.label{font-size:.75rem;font-weight:600;letter-spacing:.02em;color:var(--muted);margin-bottom:.5rem;display:block}
-
-/* ── frame picker ───────────────────────────────────── */
-.frames{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:.7rem}
-.frame{
-  border:var(--edge);border-radius:14px;background:#fff;padding:.7rem .6rem .6rem;text-align:center;
-  transition:transform .15s, box-shadow .15s
+.center{text-align:center}
+h1{
+  font-family:var(--head);font-weight:800;
+  font-size:clamp(30px,6.2vw,58px);line-height:1.06;letter-spacing:-.035em;
+  margin:18px auto 0;max-width:15ch;
 }
-.frame:hover{transform:translateY(-3px);box-shadow:var(--drop)}
-.frame[aria-pressed="true"]{background:var(--sun);box-shadow:var(--drop);transform:translateY(-3px)}
-.frame .mini{display:grid;gap:3px;margin:0 auto .55rem;background:var(--ink);padding:4px;border-radius:5px;width:54px}
-.frame .mini i{display:block;background:#fff;border-radius:2px}
-.frame b{display:block;font-family:Fredoka,sans-serif;font-size:.92rem;font-weight:600}
-.frame small{color:var(--muted);font-size:.72rem}
-.frame[aria-pressed="true"] small{color:rgba(35,26,43,.7)}
+h1 span{color:var(--pink)}
+.lede{color:var(--muted);font-size:clamp(14px,2.2vw,16px);line-height:1.6;max-width:56ch;margin:16px auto 0}
+h2{font-family:var(--head);font-weight:800;font-size:clamp(22px,4vw,30px);letter-spacing:-.03em}
+.sub{color:var(--muted);font-size:14px;margin-top:7px;line-height:1.55}
 
-/* ── camera ─────────────────────────────────────────── */
-.stage{
-  position:relative;border:var(--edge);border-radius:14px;overflow:hidden;background:var(--ink);
-  aspect-ratio:4/3;display:grid;place-items:center
+/* ── cards ───────────────────────────────── */
+.grid2{
+  display:grid;gap:clamp(14px,2.4vw,22px);margin-top:clamp(28px,5vw,46px);
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));
 }
-.stage video{width:100%;height:100%;object-fit:cover;display:block}
-.stage video.mirror{transform:scaleX(-1)}
-.camhint{color:rgba(255,244,228,.75);text-align:center;padding:1.5rem;font-size:.9rem;max-width:34ch}
-.count{
-  position:absolute;inset:0;display:none;place-items:center;background:rgba(27,16,35,.5);
-  font-family:Fredoka,sans-serif;font-weight:600;color:#fff;font-size:clamp(4rem,18vw,7rem);
-  text-shadow:0 6px 0 rgba(0,0,0,.28)
+.card{
+  position:relative;border:1px solid var(--line);border-radius:var(--r-lg);
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  padding:clamp(20px,3.4vw,28px);text-align:left;width:100%;
+  transition:border-color .2s,background .2s,transform .2s;
 }
-.count.on{display:grid;animation:tick .9s ease-out}
-@keyframes tick{0%{transform:scale(1.5);opacity:0}30%{transform:scale(1);opacity:1}100%{opacity:1}}
-.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
-.flash.on{animation:fl .32s ease-out}
-@keyframes fl{0%{opacity:0}40%{opacity:.92}100%{opacity:0}}
-.shotpill{
-  position:absolute;left:12px;top:12px;background:var(--cherry);color:#fff;border:2px solid var(--ink);
-  border-radius:999px;padding:.25rem .75rem;font-size:.8rem;font-weight:600;box-shadow:0 3px 0 rgba(0,0,0,.3)
+.card:not(.locked):hover{border-color:rgba(242,160,188,.4);transform:translateY(-2px)}
+.card.sel{border-color:var(--pink);background:rgba(242,160,188,.07)}
+.card.locked{opacity:.42;cursor:not-allowed}
+.card .glyph{
+  width:56px;height:56px;border-radius:15px;display:grid;place-items:center;
+  background:#fff;color:#1B1218;
 }
-.camtools{position:absolute;right:10px;bottom:10px;display:flex;gap:.4rem}
-.camtools button{
-  width:38px;height:38px;border-radius:11px;background:rgba(27,16,35,.72);border:2px solid rgba(255,244,228,.35);
-  color:#fff;display:grid;place-items:center;font-size:.95rem
+.card.locked .glyph{background:rgba(255,255,255,.09);color:var(--muted)}
+.card .tag{
+  display:inline-block;margin:22px 0 14px;padding:6px 13px;border-radius:99px;
+  background:rgba(255,255,255,.07);font-family:var(--head);font-weight:700;
+  font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#E6D9DF;
 }
-.camtools button[aria-pressed="true"]{background:var(--mint);color:var(--ink);border-color:var(--ink)}
+.card h3{font-family:var(--head);font-weight:800;font-size:clamp(20px,3vw,25px);letter-spacing:-.02em}
+.card p{color:var(--muted);font-size:14px;line-height:1.55;margin-top:9px;min-height:44px}
+.card .foot{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-top:20px;padding-top:18px;border-top:1px solid var(--line);
+  font-family:var(--head);font-weight:700;font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+}
+.card.locked .foot{color:var(--dim)}
+.go{
+  width:40px;height:40px;border-radius:50%;background:#fff;color:#1B1218;
+  display:grid;place-items:center;flex:none;transition:.2s;
+}
+.card:not(.locked):hover .go{background:var(--pink);transform:translateX(3px)}
+.card.locked .go{background:rgba(255,255,255,.07);color:var(--dim)}
+.radio{
+  position:absolute;top:clamp(20px,3.4vw,28px);right:clamp(20px,3.4vw,28px);
+  width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line-2);
+}
+.card.sel .radio{border-color:var(--pink);background:var(--pink);box-shadow:inset 0 0 0 4px var(--card)}
+.ribbon{
+  position:absolute;top:clamp(20px,3.4vw,28px);left:50%;transform:translateX(-50%);
+  padding:7px 15px;border-radius:99px;background:rgba(255,255,255,.08);
+  font-family:var(--head);font-weight:700;font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:#CFC4CA;white-space:nowrap;
+}
 
-.thumbs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.85rem}
-.thumb{position:relative;width:74px;aspect-ratio:4/3;border:2px solid var(--ink);border-radius:9px;overflow:hidden;background:#e9e2d8}
-.thumb canvas,.thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.thumb .n{position:absolute;left:3px;top:3px;background:var(--ink);color:#fff;font-size:.65rem;border-radius:5px;padding:0 .3rem}
-.thumb .re{position:absolute;inset:auto 0 0 0;background:rgba(27,16,35,.8);color:#fff;font-size:.66rem;padding:.15rem 0;width:100%;text-align:center}
-.thumb.empty{border-style:dashed;opacity:.5}
-
-/* ── controls ───────────────────────────────────────── */
-.chips{display:flex;flex-wrap:wrap;gap:.4rem}
-.chip{
-  border:2px solid var(--ink);border-radius:999px;padding:.34rem .8rem;font-size:.82rem;font-weight:500;background:#fff;
-  transition:transform .12s
-}
-.chip:hover{transform:translateY(-2px)}
-.chip[aria-pressed="true"]{background:var(--ink);color:var(--cream)}
-.swatches{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center}
-.sw{width:34px;height:34px;border-radius:10px;border:2px solid var(--ink);box-shadow:inset 0 0 0 0 #fff}
-.sw[aria-pressed="true"]{box-shadow:inset 0 0 0 3px #fff, 0 3px 0 rgba(0,0,0,.3);transform:translateY(-2px)}
-input[type="color"]{width:34px;height:34px;padding:0;border:2px solid var(--ink);border-radius:10px;background:none}
-.field{width:100%;border:2px solid var(--ink);border-radius:11px;padding:.55rem .75rem;background:#fff}
-.row{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
-.toggle{display:flex;align-items:center;gap:.45rem;font-size:.88rem}
-input[type="checkbox"]{width:19px;height:19px;accent-color:var(--cherry)}
-input[type="range"]{accent-color:var(--cherry);width:100%}
-
-/* ── buttons ────────────────────────────────────────── */
+/* ── buttons ─────────────────────────────── */
 .btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
-  font-family:Fredoka,sans-serif;font-weight:600;font-size:1rem;
-  border:var(--edge);border-radius:14px;padding:.72rem 1.3rem;background:#fff;
-  box-shadow:var(--drop);transition:transform .12s, box-shadow .12s
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:14px 26px;border-radius:99px;
+  font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:-.01em;
+  border:1px solid transparent;transition:.18s;min-height:48px;
 }
-.btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 7px 0 rgba(0,0,0,.30)}
-.btn:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.30)}
-.btn:disabled{opacity:.45;box-shadow:none;cursor:not-allowed}
-.btn.go{background:var(--cherry);color:#fff}
-.btn.key{background:var(--sun)}
-.btn.ok{background:var(--mint)}
-.btn.ghost{background:transparent;box-shadow:none;border-width:2px}
+.btn.primary{background:var(--pink);color:#2B1520}
+.btn.primary:hover:not(:disabled){background:#fff}
+.btn.ghost{border-color:var(--line-2);color:var(--text)}
+.btn.ghost:hover:not(:disabled){border-color:var(--pink);color:var(--pink)}
+.btn:disabled{opacity:.38;cursor:not-allowed}
 .btn.wide{width:100%}
-.btn.big{font-size:1.1rem;padding:.9rem 1.5rem}
-.actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
-.actions .grow{flex:1;min-width:150px}
+.nav{display:flex;gap:12px;flex-wrap:wrap;margin-top:clamp(26px,4vw,38px);align-items:center}
+.nav .spacer{flex:1;min-width:0}
 
-/* ── strip preview + stickers ───────────────────────── */
-.previewbox{display:flex;justify-content:center}
-.strip-stage{position:relative;max-width:100%;touch-action:none;filter:drop-shadow(0 8px 0 rgba(0,0,0,.28))}
-.strip-stage canvas{display:block;width:100%;height:auto;border-radius:6px}
-.stk{
-  position:absolute;transform-origin:center;cursor:grab;user-select:none;line-height:1;
-  font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif
+/* ── chips ───────────────────────────────── */
+.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+.chip{
+  padding:9px 16px;border-radius:99px;border:1px solid var(--line);
+  font-size:13px;font-weight:500;color:var(--muted);transition:.16s;white-space:nowrap;
 }
-.stk.sel{outline:2px dashed var(--cherry);outline-offset:4px;border-radius:8px}
-.stk:active{cursor:grabbing}
+.chip:hover{border-color:var(--line-2);color:var(--text)}
+.chip.on{background:var(--pink);border-color:var(--pink);color:#2B1520;font-weight:600}
 
-.emoji-tabs{display:flex;gap:.3rem;overflow-x:auto;padding-bottom:.4rem;margin-bottom:.5rem}
-.emoji-tabs button{font-size:1.2rem;padding:.25rem .5rem;border-radius:10px;border:2px solid transparent;flex:none}
-.emoji-tabs button[aria-pressed="true"]{border-color:var(--ink);background:var(--sun)}
-.emoji-grid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:.2rem;
-  max-height:196px;overflow-y:auto;border:2px solid var(--ink);border-radius:12px;padding:.4rem;background:#fff
+/* ── panels ──────────────────────────────── */
+.panel{
+  border:1px solid var(--line);border-radius:var(--r-lg);
+  background:rgba(255,255,255,.025);padding:clamp(18px,3vw,26px);
 }
-.emoji-grid button{font-size:1.45rem;aspect-ratio:1;border-radius:9px;transition:transform .1s}
-.emoji-grid button:hover{background:rgba(226,62,87,.14);transform:scale(1.18)}
-.selbar{
-  margin-top:.6rem;border:2px dashed var(--ink);border-radius:12px;padding:.55rem .7rem;
-  display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.85rem;background:rgba(255,194,75,.18)
+.label{
+  font-family:var(--head);font-weight:700;font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--dim);
 }
-.selbar .big-e{font-size:1.5rem}
-.selbar .mini-btn{width:32px;height:32px;border:2px solid var(--ink);border-radius:9px;background:#fff;display:grid;place-items:center}
-.selbar.idle{background:transparent;color:var(--muted);border-color:rgba(107,92,119,.4)}
-
-/* ── share / gallery ────────────────────────────────── */
-.gal{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem}
-.gal img{width:78px;border:2px solid var(--ink);border-radius:8px;cursor:pointer;background:#fff}
-
-/* ── entrance / mode picker ─────────────────────────── */
-.entrance{padding:.4rem 0 .2rem;text-align:center}
-.entrance .logo{transform:none;margin:0 auto 1rem}
-.entrance h2{font-size:clamp(1.5rem,5vw,2.1rem)}
-.entrance p{color:var(--muted);max-width:46ch;margin:.55rem auto 1.5rem;font-size:.95rem}
-.modes{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin:.4rem 0 1.3rem;max-width:520px;margin-inline:auto}
-@media(max-width:560px){.modes{grid-template-columns:1fr}}
-.mode-card{position:relative;border:var(--edge);border-radius:14px;background:#fff;padding:1.1rem 1rem;text-align:center;transition:transform .15s,box-shadow .15s}
-.mode-card:hover{transform:translateY(-3px);box-shadow:var(--drop)}
-.mode-card[aria-pressed="true"]{background:var(--sun);box-shadow:var(--drop);transform:translateY(-3px)}
-.mode-card b{display:block;font-family:Fredoka,sans-serif;font-size:1.02rem;margin-bottom:.25rem}
-.mode-card small{color:var(--muted);font-size:.78rem;display:block}
-.mode-card[aria-pressed="true"] small{color:rgba(35,26,43,.7)}
-.mode-card.soon{opacity:.6;cursor:not-allowed}
-.soon-badge{position:absolute;top:-8px;right:-6px;background:var(--cherry);color:#fff;font-size:.62rem;font-weight:700;
-  border-radius:999px;padding:.18rem .55rem;border:2px solid var(--ink);box-shadow:0 2px 0 rgba(0,0,0,.25)}
-
-/* ── camera source picker + QR pairing ─────────────── */
-.camsrc{display:flex;flex-direction:column;gap:.6rem}
-.qrpanel{border:var(--edge);border-radius:14px;padding:1.1rem 1rem;text-align:center;background:#fff}
-.qrpanel img{border-radius:10px;border:2px solid var(--ink);margin-bottom:.7rem;width:180px;height:180px;background:#fff}
-.qrcode-big{font-family:Fredoka,sans-serif;font-size:1.5rem;font-weight:700;letter-spacing:.16em;margin:.2rem 0 .7rem}
-.qrhint{color:var(--muted);font-size:.85rem;margin-bottom:.8rem}
-.qrspin{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--mint);margin-right:.4rem;animation:pulse 1.1s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
-
-/* ── remote camera page (opened on the guest's phone) ─ */
-#remoteView{min-height:100vh;display:grid;place-items:center;padding:1.2rem}
-.remote-card{max-width:460px;width:100%;text-align:center;background:var(--panel);border:var(--edge);
-  border-radius:var(--r);box-shadow:var(--drop);padding:1.6rem}
-.remote-card .stage{max-width:100%;margin:0 auto}
-#remoteStatus{margin-top:.8rem;font-size:.85rem;color:var(--muted)}
-
-/* ── toast ──────────────────────────────────────────── */
-#toasts{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:.5rem;width:min(92vw,400px)}
-.toast{
-  background:var(--ink);color:var(--cream);border-radius:13px;padding:.7rem .95rem;font-size:.9rem;
-  border:2px solid rgba(255,255,255,.18);box-shadow:0 5px 0 rgba(0,0,0,.35);animation:up .25s ease-out
+.split{display:grid;gap:clamp(16px,2.6vw,24px);grid-template-columns:1fr;margin-top:clamp(24px,4vw,36px)}
+@media (min-width:900px){
+  .split{grid-template-columns:minmax(0,1.35fr) minmax(280px,.95fr);align-items:start}
+  .split.narrow{grid-template-columns:minmax(0,1fr) minmax(300px,.8fr)}
 }
-.toast.good{background:var(--mint);color:var(--ink);border-color:var(--ink)}
-.toast.bad{background:var(--cherry);color:#fff;border-color:var(--ink)}
-@keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-.fade{opacity:0;transition:opacity .3s}
 
-footer{text-align:center;color:rgba(255,244,228,.4);font-size:.76rem;margin-top:1.6rem}
-[data-theme="day"] footer{color:var(--ink-soft)}
-@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+/* ── layout picker ───────────────────────── */
+.layouts{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,132px),1fr));margin-top:16px}
+.lay{
+  border:1px solid var(--line);border-radius:var(--r-md);padding:13px 11px;
+  display:flex;flex-direction:column;align-items:center;gap:11px;transition:.16s;position:relative;
+}
+.lay:hover{border-color:var(--line-2)}
+.lay.on{border-color:var(--pink);background:rgba(242,160,188,.08)}
+.mini{display:grid;gap:3px;width:42px}
+.mini i{background:rgba(255,255,255,.2);border-radius:2px;aspect-ratio:4/3;display:block}
+.lay.on .mini i{background:var(--pink)}
+.lay b{font-family:var(--head);font-weight:700;font-size:12px;text-align:center;line-height:1.3;letter-spacing:-.01em}
+.lay small{color:var(--dim);font-size:10.5px}
+.lay .del{position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.5);color:var(--bad);font-size:13px;display:none;place-items:center}
+.lay:hover .del{display:grid}
+
+/* ── camera ──────────────────────────────── */
+.stage{
+  position:relative;border-radius:var(--r-lg);overflow:hidden;
+  background:#0C090B;border:1px solid var(--line);
+  aspect-ratio:4/3;max-height:min(62dvh,560px);margin-inline:auto;width:100%;
+}
+.stage video{width:100%;height:100%;object-fit:cover;background:#0C090B}
+.stage video.mir{transform:scaleX(-1)}
+.stage .msg{
+  position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+  padding:26px;color:var(--muted);font-size:14px;line-height:1.6;
+}
+#cdown{
+  position:absolute;inset:0;display:none;place-items:center;
+  background:rgba(12,9,11,.5);backdrop-filter:blur(3px);
+  font-family:var(--head);font-weight:800;font-size:clamp(76px,18vw,150px);
+  color:#fff;text-shadow:0 6px 40px rgba(0,0,0,.6);
+}
+#cdown.on{display:grid;animation:pop .9s ease}
+@keyframes pop{0%{transform:scale(.55);opacity:0}30%{transform:scale(1);opacity:1}100%{transform:scale(1.14);opacity:.15}}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#flash.on{animation:fl .42s ease}
+@keyframes fl{0%{opacity:.9}100%{opacity:0}}
+.camtools{position:absolute;top:12px;right:12px;display:flex;gap:8px;z-index:3}
+.camtools .iconbtn{background:rgba(12,9,11,.62);backdrop-filter:blur(8px);border-color:rgba(255,255,255,.16);color:#fff}
+.shots{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));margin-top:16px}
+.shot{
+  position:relative;aspect-ratio:4/3;border-radius:var(--r-sm);overflow:hidden;
+  border:1px solid var(--line);background:rgba(255,255,255,.03);
+  display:grid;place-items:center;color:var(--dim);font-size:12px;font-weight:600;
+}
+.shot img{width:100%;height:100%;object-fit:cover}
+.shot .re{
+  position:absolute;inset:auto 0 0 0;padding:4px;background:rgba(12,9,11,.75);
+  font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#fff;font-weight:600;
+}
+
+/* ── strip preview ───────────────────────── */
+.stripwrap{display:grid;place-items:center;padding:clamp(14px,3vw,24px);background:rgba(0,0,0,.24);border-radius:var(--r-lg);border:1px solid var(--line)}
+.stripstage{position:relative;max-width:100%}
+.stripstage canvas{width:100%;height:auto;border-radius:9px;box-shadow:0 22px 50px rgba(0,0,0,.5)}
+.stk{position:absolute;cursor:grab;user-select:none;touch-action:none;line-height:1;transform-origin:center;z-index:5}
+.stk.sel{outline:2px dashed var(--pink);outline-offset:4px;border-radius:5px}
+
+/* ── form bits ───────────────────────────── */
+.field{margin-top:16px}
+.field .label{display:block;margin-bottom:8px}
+input[type=text],input[type=number],input[type=password],select,textarea{
+  width:100%;padding:12px 14px;border-radius:var(--r-md);
+  border:1px solid var(--line);background:rgba(255,255,255,.04);
+  font-size:14px;transition:.16s;
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink);background:rgba(255,255,255,.06)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+option{background:#231C22;color:#fff}
+.swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.sw{width:32px;height:32px;border-radius:50%;border:2px solid var(--line);transition:.16s}
+.sw.on{border-color:var(--pink);transform:scale(1.12)}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.toggle:last-child{border-bottom:0}
+.toggle span{font-size:14px;color:#E4DBE0}
+.sw-t{width:44px;height:25px;border-radius:99px;background:rgba(255,255,255,.12);position:relative;transition:.2s;flex:none}
+.sw-t::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:.2s}
+.sw-t.on{background:var(--pink)}
+.sw-t.on::after{transform:translateX(19px)}
+
+/* ── emoji ───────────────────────────────── */
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-top:12px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.tabs button{width:38px;height:38px;border-radius:11px;border:1px solid var(--line);font-size:17px;flex:none}
+.tabs button.on{border-color:var(--pink);background:rgba(242,160,188,.12)}
+.emoji{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:5px;max-height:190px;overflow-y:auto;margin-top:10px;padding-right:4px}
+.emoji button{aspect-ratio:1;border-radius:9px;font-size:20px;display:grid;place-items:center;transition:.14s}
+.emoji button:hover{background:rgba(255,255,255,.08);transform:scale(1.12)}
+
+/* ── gallery / toast / modal ─────────────── */
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:9px;margin-top:14px}
+.gal img{border-radius:var(--r-sm);border:1px solid var(--line);cursor:pointer;aspect-ratio:3/4;object-fit:cover}
+#toast{
+  position:fixed;left:50%;transform:translateX(-50%) translateY(20px);
+  bottom:calc(22px + env(safe-area-inset-bottom));z-index:200;
+  padding:13px 22px;border-radius:99px;background:transparent;
+  border:1px solid var(--line-2);backdrop-filter:blur(16px);
+  font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:.28s;
+  max-width:calc(100vw - 32px);text-align:center;
+}
+#toast.on{opacity:1;transform:translateX(-50%);background:rgba(42,34,40,.94)}
+#toast.good{border-color:rgba(123,217,168,.5);color:var(--good)}
+#toast.bad{border-color:rgba(255,122,133,.5);color:var(--bad)}
+.modal{position:fixed;inset:0;z-index:150;display:none;place-items:center;padding:16px;background:rgba(8,6,7,.82);backdrop-filter:blur(7px)}
+.modal.on{display:grid}
+.sheet{
+  width:min(660px,100%);max-height:88dvh;overflow-y:auto;
+  background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-lg);
+  padding:clamp(20px,3.6vw,30px);
+}
+.sheet h2{margin-bottom:5px}
+.row{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr))}
+.hint{font-size:12.5px;color:var(--dim);line-height:1.6;margin-top:7px}
+hr{border:0;border-top:1px solid var(--line);margin:22px 0}
 </style>
 </head>
-
 <body>
-<div class="wrap">
 
-<header>
+<header class="top">
   <div class="bar">
-    <div class="logo">📸</div>
-    <div class="brand">
-      <h1 id="brandName">RyzeBooth</h1>
-      <p data-t="tagline">Four steps. One perfect strip.</p>
-    </div>
+    <div class="brand" id="brandBtn"><i>◉</i><span id="brandName">smora</span></div>
     <div class="spacer"></div>
-    <div class="lang-wrap">
-      <button class="chip-btn" id="langBtn" title="Language" aria-haspopup="true">🌍</button>
-      <div class="lang-menu" id="langMenu"></div>
-    </div>
-    <button class="chip-btn" id="soundBtn" title="Sound" aria-pressed="true">🔊</button>
-    <button class="chip-btn" id="themeBtn" title="Theme">🌙</button>
+    <span class="count" id="count">1 of 4</span>
+    <button class="iconbtn on" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
   </div>
-
-  <nav class="rail" id="rail"></nav>
+  <div class="track"><div class="fill" id="fill"></div></div>
 </header>
 
-<!-- ═══ STEP 0 · ENTRANCE ════════════════════════════ -->
-<section class="step on panel" id="step0">
-  <div class="entrance">
-    <div class="logo">📸</div>
-    <h2 data-t="entranceTitle">Welcome to the booth</h2>
-    <p data-t="entranceTag">Step up, strike a pose, and walk away with a strip to keep — right from this screen.</p>
-    <div id="entranceStartWrap">
-      <button class="btn go big" id="entranceStartBtn" data-t="startbooth">🎬 Start Photobooth</button>
-    </div>
-    <div id="modePicker" hidden>
-      <span class="label" style="text-align:center;display:block" data-t="choosemode">Choose a mode</span>
-      <div class="modes">
-        <button class="mode-card" data-mode="solo" aria-pressed="true">
-          <b data-t="modesolo">Solo</b>
-          <small data-t="modesolod">One camera, classic booth</small>
-        </button>
-        <button class="mode-card soon" data-mode="duo" aria-pressed="false">
-          <b data-t="modeduo">Duo · 2 Cams</b>
-          <small data-t="modeduod">Two angles, one strip</small>
-          <span class="soon-badge" data-t="comingsoon">Soon</span>
-        </button>
+<main>
+
+<!-- ══════════ STEP 1 ══════════ -->
+<section class="step on" id="s1">
+  <div class="center">
+    <span class="eyebrow">Step 01</span>
+    <h1>Who's joining your <span>photo booth?</span></h1>
+    <p class="lede">Take your own photo strip using Solo Booth. Duo Booth for long-distance photo sessions is coming soon.</p>
+  </div>
+  <div class="grid2">
+    <button class="card sel" id="soloCard">
+      <div class="radio"></div>
+      <div class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 16 0v1"/></svg></div>
+      <span class="tag">Just me</span>
+      <h3>Solo Booth</h3>
+      <p>Take your own photo strip with your camera and your best poses.</p>
+      <div class="foot"><span>Select booth</span>
+        <span class="go"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
       </div>
-      <div class="actions" style="justify-content:center">
-        <button class="btn go grow big" data-go="1" style="max-width:360px" data-t="s1cta">Next: open the camera</button>
+    </button>
+    <div class="card locked">
+      <div class="radio"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="margin:4px"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+      <div class="ribbon">Coming soon</div>
+      <div class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.4"/><path d="M2 20v-.6a6.6 6.6 0 0 1 12.2-3.4"/><circle cx="17" cy="10" r="2.8"/><path d="M22 20a5 5 0 0 0-7.4-4.4"/></svg></div>
+      <span class="tag">With someone</span>
+      <h3>Duo Booth</h3>
+      <p>Take photos together with someone from anywhere and appear in the same frame.</p>
+      <div class="foot"><span>Not available yet</span>
+        <span class="go"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
       </div>
     </div>
   </div>
+  <div class="nav"><div class="spacer"></div><button class="btn primary" data-go="2">Continue</button></div>
 </section>
 
-<!-- ═══ STEP 1 · FRAME ═══════════════════════════════ -->
-<section class="step panel" id="step1">
-  <div class="lede">
-    <h2 data-t="s1h">Pick your frame</h2>
-    <p data-t="s1p">This decides how many photos you'll take and how they're arranged.</p>
+<!-- ══════════ STEP 2 ══════════ -->
+<section class="step" id="s2">
+  <div class="center">
+    <span class="eyebrow">Step 02</span>
+    <h1>Pick your <span>strip</span></h1>
+    <p class="lede">Choose a layout, a look, and how long you get to pose between shots.</p>
   </div>
-  <div class="frames" id="frames"></div>
-  <div class="actions">
-    <button class="btn go big grow" data-go="2" data-t="s1cta">Next: open the camera</button>
-  </div>
-</section>
-
-<!-- ═══ STEP 2 · SHOOT ═══════════════════════════════ -->
-<section class="step panel" id="step2">
-  <div class="lede">
-    <h2 data-t="s2h">Strike a pose</h2>
-    <p data-t="s2p">Each shot gets a countdown. Don't like one? Retake just that photo.</p>
-  </div>
-  <div class="cols">
+  <div class="split">
+    <div class="panel">
+      <span class="label">Strip layout</span>
+      <div class="layouts" id="layouts"></div>
+    </div>
     <div>
-      <div class="stage" id="stage">
-        <video id="video" class="mirror" playsinline autoplay muted></video>
-        <div class="camhint" id="camhint" data-t="camstart">Your camera is off. Tap "Start camera" and allow access when your browser asks.</div>
-        <div class="shotpill" id="shotpill" hidden></div>
-        <div class="count" id="count"></div>
-        <div class="flash" id="flash"></div>
-        <div class="camtools" hidden id="camtools">
-          <button id="mirrorBtn" aria-pressed="true" title="Mirror">🪞</button>
-          <button id="flipBtn" title="Switch camera">🔄</button>
+      <div class="panel">
+        <span class="label">Look</span>
+        <div class="chips" id="looks2"></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <span class="label">Countdown</span>
+        <div class="chips" id="timers"></div>
+        <div class="toggle" style="margin-top:14px"><span>Mirror my camera</span><button class="sw-t on" id="mirTog" role="switch" aria-checked="true"></button></div>
+      </div>
+    </div>
+  </div>
+  <div class="nav"><button class="btn ghost" data-go="1">Back</button><div class="spacer"></div><button class="btn primary" data-go="3">Open camera</button></div>
+</section>
+
+<!-- ══════════ STEP 3 ══════════ -->
+<section class="step" id="s3">
+  <div class="center">
+    <span class="eyebrow">Step 03</span>
+    <h1>Strike a <span>pose</span></h1>
+    <p class="lede" id="shotLine">Four shots, one after another. Tap any photo to retake it.</p>
+  </div>
+  <div class="split narrow">
+    <div>
+      <div class="stage">
+        <video id="cam" playsinline autoplay muted></video>
+        <div class="msg" id="camMsg">Camera is off. Tap “Start camera” to begin.</div>
+        <div class="camtools">
+          <button class="iconbtn" id="flipBtn" title="Switch camera" aria-label="Switch camera">⟳</button>
+          <button class="iconbtn on" id="mirBtn" title="Mirror" aria-label="Mirror">⇋</button>
         </div>
+        <div id="cdown" aria-live="polite"></div>
+        <div id="flash"></div>
       </div>
-      <div class="thumbs" id="thumbs"></div>
+      <div class="shots" id="shots"></div>
     </div>
-    <div>
-      <span class="label" data-t="look">Look</span>
-      <div class="chips" id="filters2"></div>
-
-      <span class="label" style="margin-top:1rem" data-t="timer">Countdown</span>
-      <div class="chips" id="timers"></div>
-
-      <div class="actions" style="margin-top:1.1rem;flex-direction:column">
-        <div class="camsrc" id="camSrcRow">
-          <button class="btn key wide big" id="srcThisBtn">📷 <span data-t="srcthis">Use this device</span></button>
-          <button class="btn ghost wide" id="srcOtherBtn">🔗 <span data-t="srcother">Use another device (scan QR)</span></button>
-        </div>
-        <div class="qrpanel" id="qrPanel" hidden>
-          <img id="qrImg" alt="QR code">
-          <div class="qrcode-big" id="qrCodeText"></div>
-          <p class="qrhint"><span class="qrspin" id="qrDot"></span><span id="qrStatus" data-t="qrwaiting">Waiting for the other device to connect…</span></p>
-          <button class="btn ghost wide" id="qrCancelBtn" data-t="cancel">Cancel</button>
-        </div>
-        <button class="btn go wide big" id="shootBtn" hidden data-t="startcam">Start camera</button>
+    <div class="panel">
+      <span class="label">Look</span>
+      <div class="chips" id="looks3"></div>
+      <div class="field">
+        <button class="btn primary wide" id="shoot">Start camera</button>
       </div>
+      <p class="hint">Your camera never leaves this device. Photos are only saved when you choose to save them.</p>
     </div>
   </div>
-  <div class="actions">
-    <button class="btn ghost" data-go="1" data-t="back">Back</button>
-    <button class="btn go grow" data-go="3" id="toDecorate" disabled data-t="s2cta">Next: decorate</button>
-  </div>
+  <div class="nav"><button class="btn ghost" data-go="2">Back</button><div class="spacer"></div><button class="btn primary" id="toStep4" disabled>Decorate strip</button></div>
 </section>
 
-<!-- ═══ STEP 3 · DECORATE ════════════════════════════ -->
-<section class="step panel" id="step3">
-  <div class="lede">
-    <h2 data-t="s3h">Make it yours</h2>
-    <p data-t="s3p">Tap an emoji to drop it on the strip. Tap a placed sticker to select it, then tap any other emoji to swap it out.</p>
+<!-- ══════════ STEP 4 ══════════ -->
+<section class="step" id="s4">
+  <div class="center">
+    <span class="eyebrow">Step 04</span>
+    <h1>Make it <span>yours</span></h1>
+    <p class="lede">Change the paper, add a caption, drop some stickers, then keep it forever.</p>
   </div>
-  <div class="cols">
-    <div class="previewbox">
-      <div class="strip-stage" id="stripStage">
-        <canvas id="preview"></canvas>
-      </div>
+  <div class="split">
+    <div class="stripwrap">
+      <div class="stripstage" id="stage"><canvas id="preview"></canvas></div>
     </div>
     <div>
-      <span class="label" data-t="stickers">Stickers</span>
-      <div class="emoji-tabs" id="emojiTabs"></div>
-      <div class="emoji-grid" id="emojiGrid"></div>
-      <div class="selbar idle" id="selBar"></div>
-
-      <span class="label" style="margin-top:1rem" data-t="look">Look</span>
-      <div class="chips" id="filters3"></div>
-
-      <span class="label" style="margin-top:1rem" data-t="framecolor">Frame colour</span>
-      <div class="swatches" id="swatches"></div>
-
-      <span class="label" style="margin-top:1rem" data-t="caption">Caption</span>
-      <input class="field" id="caption" maxlength="26" placeholder="Saturday night" data-tp="captionph">
-      <div class="row" style="margin-top:.6rem">
-        <label class="toggle"><input type="checkbox" id="showDate" checked><span data-t="showdate">Print today's date</span></label>
+      <div class="panel">
+        <span class="label">Paper</span>
+        <div class="swatches" id="swatches"></div>
+        <div class="field">
+          <span class="label">Caption</span>
+          <input type="text" id="caption" maxlength="34" placeholder="say something…">
+        </div>
+        <div class="toggle" style="margin-top:8px"><span>Print the date</span><button class="sw-t on" id="dateTog" role="switch" aria-checked="true"></button></div>
       </div>
-    </div>
-  </div>
-  <div class="actions">
-    <button class="btn ghost" data-go="2" data-t="back">Back</button>
-    <button class="btn go grow" data-go="4" data-t="s3cta">Next: save &amp; share</button>
-  </div>
-</section>
-
-<!-- ═══ STEP 4 · SHARE ═══════════════════════════════ -->
-<section class="step panel" id="step4">
-  <div class="lede">
-    <h2 data-t="s4h">Looking good</h2>
-    <p data-t="s4p">Save it to your device, or send it straight to the Discord channel.</p>
-  </div>
-  <div class="cols">
-    <div class="previewbox"><div class="strip-stage"><canvas id="final"></canvas></div></div>
-    <div>
-      <div class="actions" style="margin-top:0;flex-direction:column">
-        <button class="btn key wide big" id="dlBtn" data-t="download">⬇️ Download PNG</button>
-        <button class="btn ok wide big" id="dcBtn" data-t="senddc">💬 Send to Discord</button>
-        <button class="btn ghost wide" data-go="3" data-t="tweak">Keep editing</button>
-        <button class="btn ghost wide" id="againBtn" data-t="again">Start a new strip</button>
+      <div class="panel" style="margin-top:16px">
+        <span class="label">Stickers</span>
+        <div class="tabs" id="tabs"></div>
+        <div class="emoji" id="emoji"></div>
+        <div class="chips" id="stkBar" style="margin-top:10px"></div>
       </div>
-      <div id="galWrap" hidden>
-        <span class="label" style="margin-top:1.2rem" data-t="thissession">This session</span>
+      <div class="panel" style="margin-top:16px">
+        <button class="btn primary wide" id="saveBtn">Save to my device</button>
+        <p class="hint" id="saveHint">Saves a PNG to your device.</p>
+        <button class="btn ghost wide" id="againBtn" style="margin-top:10px">Take another strip</button>
+      </div>
+      <div class="panel" id="galWrap" hidden style="margin-top:16px">
+        <span class="label">This session</span>
         <div class="gal" id="gal"></div>
       </div>
     </div>
   </div>
 </section>
 
-<footer>AuraBooth · <span data-t="foot">runs entirely in your browser — nothing is uploaded unless you press send</span></footer>
-</div>
+</main>
 
-<!-- Shown instead of the booth when this page is opened via a QR code / ?remote= link -->
-<div id="remoteView" hidden>
-  <div class="remote-card">
-    <div class="logo" style="width:56px;height:56px;font-size:1.6rem;margin:0 auto 1rem;transform:none">📸</div>
-    <h2 data-t="remoteTitle">You're the second camera</h2>
-    <p style="color:var(--muted);font-size:.92rem;margin:.5rem 0 1.1rem" data-t="remoteHint">Point this phone at the group, then tap start. Keep this tab open — the booth screen will take the photos.</p>
-    <div class="stage">
-      <video id="remoteVideo" class="mirror" playsinline autoplay muted></video>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- ══════════ ADMIN ══════════ -->
+<div class="modal" id="adminModal">
+  <div class="sheet">
+    <div style="display:flex;align-items:start;gap:14px">
+      <div style="flex:1"><h2>Strip manager</h2><p class="sub">Add your own strip layouts. They show up for everyone using this booth on this device, and you can export them to ship with the site.</p></div>
+      <button class="iconbtn" id="adminClose" aria-label="Close">✕</button>
     </div>
-    <button class="btn go wide big" id="remoteStartBtn" style="margin-top:1rem">🔴 <span data-t="remoteStart">Start streaming</span></button>
-    <p id="remoteStatus"></p>
+
+    <div id="adminLock">
+      <div class="field"><span class="label">Admin passcode</span><input type="password" id="adminPass" placeholder="••••••"></div>
+      <button class="btn primary wide" id="adminGo" style="margin-top:14px">Unlock</button>
+    </div>
+
+    <div id="adminBody" hidden>
+      <hr>
+      <div class="field"><span class="label">Name</span><input type="text" id="fName" placeholder="Classic strip" maxlength="26"></div>
+      <div class="row" style="margin-top:14px">
+        <div><span class="label">Columns</span><input type="number" id="fCols" value="1" min="1" max="6"></div>
+        <div><span class="label">Rows</span><input type="number" id="fRows" value="4" min="1" max="8"></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div><span class="label">Photo width</span><input type="number" id="fCw" value="560" min="120" max="2000" step="10"></div>
+        <div><span class="label">Photo height</span><input type="number" id="fCh" value="420" min="120" max="2000" step="10"></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div><span class="label">Border</span><input type="number" id="fPad" value="30" min="0" max="200"></div>
+        <div><span class="label">Gap</span><input type="number" id="fGap" value="16" min="0" max="200"></div>
+        <div><span class="label">Footer</span><input type="number" id="fFoot" value="110" min="0" max="400"></div>
+        <div><span class="label">Corner</span><input type="number" id="fRad" value="10" min="0" max="120"></div>
+      </div>
+      <div class="field">
+        <span class="label">Overlay image (optional)</span>
+        <input type="file" id="fOver" accept="image/png,image/webp">
+        <p class="hint">A transparent PNG drawn on top of the whole strip — borders, doodles, logos. Keep it the same shape as the preview below.</p>
+      </div>
+      <div class="field">
+        <span class="label">Preview</span>
+        <div class="stripwrap" style="margin-top:8px"><div class="stripstage" style="width:190px"><canvas id="fPrev"></canvas></div></div>
+      </div>
+      <button class="btn primary wide" id="fSave" style="margin-top:16px">Add this strip</button>
+      <hr>
+      <span class="label">Saved strips</span>
+      <div class="layouts" id="adminList"></div>
+      <div class="row" style="margin-top:18px">
+        <button class="btn ghost" id="fExport">Export as file</button>
+        <button class="btn ghost" id="fImportBtn">Import a file</button>
+      </div>
+      <input type="file" id="fImport" accept="application/json" hidden>
+      <p class="hint">Export gives you a <b>strips.json</b>. Drop it next to your index.html when you deploy and every visitor gets these layouts automatically.</p>
+    </div>
   </div>
 </div>
 
-<div id="toasts"></div>
-
-<script>
-/* ═══════════════════ translations ═══════════════════ */
-const T = {
-  en:{name:"English",tagline:"Four steps. One perfect strip.",steps:["Frame","Shoot","Decorate","Share"],
-    s1h:"Pick your frame",s1p:"This decides how many photos you'll take and how they're arranged.",s1cta:"Next: open the camera",
-    s2h:"Strike a pose",s2p:"Each shot gets a countdown. Don't like one? Retake just that photo.",s2cta:"Next: decorate",
-    s3h:"Make it yours",s3p:"Tap an emoji to drop it on the strip. Tap a placed sticker to select it, then tap any other emoji to swap it out.",s3cta:"Next: save & share",
-    s4h:"Looking good",s4p:"Save it to your device, or send it straight to the Discord channel.",
-    look:"Look",timer:"Countdown",stickers:"Stickers",framecolor:"Frame colour",caption:"Caption",captionph:"Saturday night",
-    showdate:"Print today's date",back:"Back",startcam:"Start camera",takeshot:"Take photo",retakeall:"Retake all",
-    download:"⬇️ Download PNG",senddc:"💬 Send to Discord",tweak:"Keep editing",again:"Start a new strip",
-    thissession:"This session",camstart:'Your camera is off. Tap "Start camera" and allow access when your browser asks.',
-    foot:"runs entirely in your browser — nothing is uploaded unless you press send",
-    shotof:"Photo {a} of {b}",retake:"Retake",off:"Off",sec:"{n}s",ready:"Camera ready",
-    blocked:"Camera blocked. Allow camera access in your browser's address bar, then tap Start camera again.",
-    saved:"Downloaded",sending:"Sending…",sent:"Sent to Discord",failed:"Discord didn't accept it. Check the webhook URL in the code.",
-    nohook:"No webhook set. Paste one at the top of index.html.",swap:"Tap an emoji to swap this one",tapstk:"No sticker selected",
-    entranceTitle:"Welcome to the booth",entranceTag:"Step up, strike a pose, and walk away with a strip to keep — right from this screen.",
-    startbooth:"🎬 Start Photobooth",choosemode:"Choose a mode",modesolo:"Solo",modesolod:"One camera, classic booth",
-    modeduo:"Duo · 2 Cams",modeduod:"Two angles, one strip",comingsoon:"Soon",comingsoon2:"Duo mode is coming soon — stay tuned!",
-    srcthis:"Use this device",srcother:"Use another device (scan QR)",qrwaiting:"Waiting for the other device to connect…",
-    qrconnected:"Connected! Streaming from the other device.",qrerror:"Couldn't start pairing. Check your connection and try again.",
-    cancel:"Cancel",remoteTitle:"You're the second camera",
-    remoteHint:"Point this phone at the group, then tap start. Keep this tab open — the booth screen will take the photos.",
-    remoteStart:"Start streaming",remoteLive:"🔴 You're live — the booth screen can see you now.",
-    remoteNoCam:"Camera permission needed to stream.",remoteConnErr:"Couldn't connect to the booth. Make sure its QR code is still on screen.",
-    autosaved:"Auto-saved to Discord ✅"},
-
-  es:{name:"Español",tagline:"Cuatro pasos. Una tira perfecta.",steps:["Marco","Fotos","Decorar","Compartir"],
-    s1h:"Elige tu marco",s1p:"Esto decide cuántas fotos tomarás y cómo se ordenan.",s1cta:"Siguiente: abrir la cámara",
-    s2h:"Pose lista",s2p:"Cada foto tiene cuenta atrás. ¿No te gusta una? Repite solo esa.",s2cta:"Siguiente: decorar",
-    s3h:"Hazla tuya",s3p:"Toca un emoji para ponerlo en la tira. Toca un sticker colocado para seleccionarlo y luego toca otro emoji para cambiarlo.",s3cta:"Siguiente: guardar",
-    s4h:"Se ve genial",s4p:"Guárdala en tu dispositivo o envíala al canal de Discord.",
-    look:"Estilo",timer:"Cuenta atrás",stickers:"Stickers",framecolor:"Color del marco",caption:"Texto",captionph:"Sábado por la noche",
-    showdate:"Imprimir la fecha de hoy",back:"Atrás",startcam:"Encender cámara",takeshot:"Tomar foto",retakeall:"Repetir todas",
-    download:"⬇️ Descargar PNG",senddc:"💬 Enviar a Discord",tweak:"Seguir editando",again:"Nueva tira",
-    thissession:"Esta sesión",camstart:'La cámara está apagada. Toca "Encender cámara" y permite el acceso.',
-    foot:"funciona solo en tu navegador — nada se sube hasta que pulses enviar",
-    shotof:"Foto {a} de {b}",retake:"Repetir",off:"Sin",sec:"{n}s",ready:"Cámara lista",
-    blocked:"Cámara bloqueada. Permite el acceso en la barra de direcciones y vuelve a intentarlo.",
-    saved:"Descargada",sending:"Enviando…",sent:"Enviada a Discord",failed:"Discord la rechazó. Revisa la URL del webhook en el código.",
-    nohook:"Sin webhook. Pégalo arriba en index.html.",swap:"Toca un emoji para cambiar este",tapstk:"Ningún sticker seleccionado"},
-
-  fr:{name:"Français",tagline:"Quatre étapes. Une bande parfaite.",steps:["Cadre","Photos","Décorer","Partager"],
-    s1h:"Choisis ton cadre",s1p:"Cela définit le nombre de photos et leur disposition.",s1cta:"Suivant : ouvrir la caméra",
-    s2h:"Prends la pose",s2p:"Chaque photo a un compte à rebours. Une ratée ? Reprends-la seule.",s2cta:"Suivant : décorer",
-    s3h:"Personnalise",s3p:"Touche un emoji pour l'ajouter. Touche un sticker placé pour le sélectionner, puis un autre emoji pour le remplacer.",s3cta:"Suivant : enregistrer",
-    s4h:"Très joli",s4p:"Enregistre la bande ou envoie-la sur le salon Discord.",
-    look:"Style",timer:"Compte à rebours",stickers:"Stickers",framecolor:"Couleur du cadre",caption:"Légende",captionph:"Samedi soir",
-    showdate:"Imprimer la date du jour",back:"Retour",startcam:"Démarrer la caméra",takeshot:"Prendre la photo",retakeall:"Tout reprendre",
-    download:"⬇️ Télécharger le PNG",senddc:"💬 Envoyer sur Discord",tweak:"Continuer l'édition",again:"Nouvelle bande",
-    thissession:"Cette session",camstart:'La caméra est éteinte. Touche « Démarrer la caméra » et autorise l\'accès.',
-    foot:"tout se passe dans ton navigateur — rien n'est envoyé sans ton accord",
-    shotof:"Photo {a} sur {b}",retake:"Reprendre",off:"Aucun",sec:"{n}s",ready:"Caméra prête",
-    blocked:"Caméra bloquée. Autorise l'accès dans la barre d'adresse puis réessaie.",
-    saved:"Téléchargée",sending:"Envoi…",sent:"Envoyée sur Discord",failed:"Discord a refusé. Vérifie l'URL du webhook dans le code.",
-    nohook:"Aucun webhook. Colle-le en haut de index.html.",swap:"Touche un emoji pour le remplacer",tapstk:"Aucun sticker sélectionné"},
-
-  de:{name:"Deutsch",tagline:"Vier Schritte. Ein perfekter Streifen.",steps:["Rahmen","Fotos","Gestalten","Teilen"],
-    s1h:"Wähle deinen Rahmen",s1p:"Das legt fest, wie viele Fotos du machst und wie sie angeordnet sind.",s1cta:"Weiter: Kamera öffnen",
-    s2h:"Pose machen",s2p:"Jedes Foto hat einen Countdown. Eins misslungen? Nur das wiederholen.",s2cta:"Weiter: gestalten",
-    s3h:"Mach es zu deinem",s3p:"Tippe ein Emoji an, um es aufzukleben. Tippe einen Sticker an, um ihn auszuwählen, dann ein anderes Emoji zum Austauschen.",s3cta:"Weiter: speichern",
-    s4h:"Sieht gut aus",s4p:"Speichere den Streifen oder schick ihn direkt in den Discord-Kanal.",
-    look:"Look",timer:"Countdown",stickers:"Sticker",framecolor:"Rahmenfarbe",caption:"Text",captionph:"Samstagabend",
-    showdate:"Heutiges Datum drucken",back:"Zurück",startcam:"Kamera starten",takeshot:"Foto machen",retakeall:"Alle wiederholen",
-    download:"⬇️ PNG herunterladen",senddc:"💬 An Discord senden",tweak:"Weiter bearbeiten",again:"Neuer Streifen",
-    thissession:"Diese Sitzung",camstart:'Die Kamera ist aus. Tippe auf „Kamera starten" und erlaube den Zugriff.',
-    foot:"läuft komplett im Browser — nichts wird ohne dich hochgeladen",
-    shotof:"Foto {a} von {b}",retake:"Neu",off:"Aus",sec:"{n}s",ready:"Kamera bereit",
-    blocked:"Kamera blockiert. Erlaube den Zugriff in der Adressleiste und versuche es erneut.",
-    saved:"Heruntergeladen",sending:"Senden…",sent:"An Discord gesendet",failed:"Discord hat abgelehnt. Prüfe die Webhook-URL im Code.",
-    nohook:"Kein Webhook. Füge ihn oben in index.html ein.",swap:"Tippe ein Emoji zum Austauschen",tapstk:"Kein Sticker ausgewählt"},
-
-  ja:{name:"日本語",tagline:"4ステップで、最高の一枚。",steps:["フレーム","撮影","デコる","共有"],
-    s1h:"フレームを選ぶ",s1p:"撮る枚数と並び方が決まります。",s1cta:"次へ：カメラを開く",
-    s2h:"ポーズをとって",s2p:"各カットにカウントダウンがあります。気に入らなければ1枚だけ撮り直せます。",s2cta:"次へ：デコる",
-    s3h:"自分だけの一枚に",s3p:"絵文字をタップして貼り付け。貼った絵文字をタップして選び、別の絵文字をタップすると入れ替わります。",s3cta:"次へ：保存",
-    s4h:"いい感じ",s4p:"端末に保存するか、Discordチャンネルへ直接送れます。",
-    look:"フィルター",timer:"カウントダウン",stickers:"ステッカー",framecolor:"フレームの色",caption:"キャプション",captionph:"土曜の夜",
-    showdate:"今日の日付を入れる",back:"戻る",startcam:"カメラを起動",takeshot:"撮影する",retakeall:"すべて撮り直す",
-    download:"⬇️ PNGを保存",senddc:"💬 Discordへ送る",tweak:"編集を続ける",again:"новый",
-    thissession:"このセッション",camstart:"カメラはオフです。「カメラを起動」をタップして許可してください。",
-    foot:"すべてブラウザ内で動作します。送信するまで何もアップロードされません",
-    shotof:"{b}枚中 {a}枚目",retake:"撮り直す",off:"なし",sec:"{n}秒",ready:"カメラ準備完了",
-    blocked:"カメラがブロックされています。アドレスバーから許可して、もう一度お試しください。",
-    saved:"保存しました",sending:"送信中…",sent:"Discordへ送りました",failed:"Discordが受け付けませんでした。コード内のWebhook URLを確認してください。",
-    nohook:"Webhookが未設定です。index.htmlの先頭に貼り付けてください。",swap:"絵文字をタップで入れ替え",tapstk:"ステッカー未選択"},
-
-  pt:{name:"Português",tagline:"Quatro passos. Uma tira perfeita.",steps:["Moldura","Fotos","Decorar","Partilhar"],
-    s1h:"Escolhe a moldura",s1p:"Define quantas fotos vais tirar e como ficam dispostas.",s1cta:"Seguinte: abrir a câmara",
-    s2h:"Faz a pose",s2p:"Cada foto tem contagem decrescente. Não gostaste de uma? Repete só essa.",s2cta:"Seguinte: decorar",
-    s3h:"Deixa com a tua cara",s3p:"Toca num emoji para o colar. Toca num autocolante já colocado para o selecionar e depois noutro emoji para o trocar.",s3cta:"Seguinte: guardar",
-    s4h:"Ficou ótimo",s4p:"Guarda no teu dispositivo ou envia direto para o canal do Discord.",
-    look:"Estilo",timer:"Contagem",stickers:"Autocolantes",framecolor:"Cor da moldura",caption:"Legenda",captionph:"Sábado à noite",
-    showdate:"Imprimir a data de hoje",back:"Voltar",startcam:"Ligar câmara",takeshot:"Tirar foto",retakeall:"Repetir todas",
-    download:"⬇️ Transferir PNG",senddc:"💬 Enviar para Discord",tweak:"Continuar a editar",again:"Nova tira",
-    thissession:"Esta sessão",camstart:'A câmara está desligada. Toca em "Ligar câmara" e permite o acesso.',
-    foot:"corre inteiramente no teu navegador — nada é enviado sem carregares",
-    shotof:"Foto {a} de {b}",retake:"Repetir",off:"Não",sec:"{n}s",ready:"Câmara pronta",
-    blocked:"Câmara bloqueada. Permite o acesso na barra de endereço e tenta de novo.",
-    saved:"Transferida",sending:"A enviar…",sent:"Enviada para o Discord",failed:"O Discord recusou. Verifica o URL do webhook no código.",
-    nohook:"Sem webhook. Cola-o no topo do index.html.",swap:"Toca num emoji para trocar",tapstk:"Nenhum autocolante selecionado"}
-};
-T.ja.again = "新しいストリップ";
-
-/* ═══════════════════ frames ═══════════════════ */
-const FRAMES = {
-  strip4:{label:"Classic strip",shots:4,cols:1,rows:4,cw:560,ch:420,pad:30,gap:16,foot:110,mini:[1,4]},
-  strip3:{label:"Mini strip",  shots:3,cols:1,rows:3,cw:560,ch:420,pad:30,gap:16,foot:100,mini:[1,3]},
-  grid4: {label:"Grid",        shots:4,cols:2,rows:2,cw:460,ch:460,pad:28,gap:16,foot:96, mini:[2,2]},
-  duo:   {label:"Duo",         shots:2,cols:1,rows:2,cw:620,ch:430,pad:28,gap:16,foot:96, mini:[1,2]},
-  polaroid:{label:"Polaroid",  shots:1,cols:1,rows:1,cw:640,ch:560,pad:34,gap:0, foot:160,mini:[1,1]},
-  single:{label:"Big one",     shots:1,cols:1,rows:1,cw:760,ch:560,pad:20,gap:0, foot:70, mini:[1,1]}
-};
-
-const LOOKS = {
-  none:   {label:"None",      css:"none"},
-  warm:   {label:"Warm",      css:"saturate(1.25) sepia(.18) brightness(1.06) contrast(1.02)"},
-  film:   {label:"Film",      css:"sepia(.35) contrast(1.12) brightness(.97) saturate(1.15)"},
-  mono:   {label:"Mono",      css:"grayscale(1) contrast(1.25) brightness(1.05)"},
-  candy:  {label:"Candy",     css:"saturate(1.5) brightness(1.1) contrast(.92) hue-rotate(-8deg)"},
-  cool:   {label:"Cool",      css:"hue-rotate(180deg) saturate(1.15) brightness(1.04)"},
-  neon:   {label:"Neon",      css:"saturate(2.1) contrast(1.22) hue-rotate(160deg)"},
-  dream:  {label:"Dream",     css:"brightness(1.12) contrast(.88) saturate(1.3) blur(.4px)"},
-  noir:   {label:"Noir",      css:"grayscale(1) contrast(1.6) brightness(.9)"},
-  faded:  {label:"Faded",     css:"saturate(.72) brightness(1.1) contrast(.9) sepia(.12)"}
-};
-
-const COLORS = ["#FFF4E4","#FFFFFF","#231A2B","#E23E57","#5FD6A8","#FFC24B","#C9A7E8","#7FB3FF","#FF9ECF","#1B1023"];
-
-const EMOJI = {
-  "😀":"😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😋 😜 🤪 😎 🥸 🤓 🧐 🤨 😏 😴 🤤 🥳 🤠 😭 😱 🤯 🥺 😤 🤗 🤭 🫠",
-  "❤️":"❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💖 💗 💓 💞 💕 💘 💝 💟 ❣️ 💔 😻 💋 🫶 👩‍❤️‍👨 💌",
-  "🎉":"🎉 🎊 🎈 🎁 🎂 🍰 🪅 🎆 🎇 ✨ 🌟 ⭐ 💫 🔥 💥 🎵 🎶 🎤 🎧 🕺 💃 🪩 🍾 🥂 🍻 🎺 🥁",
-  "🌸":"🌸 🌺 🌻 🌷 🌹 🥀 🌼 💐 🍀 🍄 🌈 ☀️ 🌤️ ⛅ 🌙 🌊 🍁 🍂 🌴 🌵 🦋 🐝 ❄️ ⚡",
-  "🐶":"🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐔 🐧 🐦 🦄 🐢 🐙 🦖 🐳 🦕",
-  "🍕":"🍕 🍔 🍟 🌭 🍿 🧁 🍩 🍪 🍫 🍬 🍭 🍦 🍨 🍉 🍓 🍒 🍑 🥑 🌮 🍜 🍣 🧋 ☕ 🥤",
-  "👋":"👋 🤚 ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 👈 👉 👆 👇 👍 👎 ✊ 👊 🙌 👏 🙏 💪 🫵",
-  "💯":"💯 ✅ ❌ ⚡ 🚀 👑 💎 🎯 🏆 🥇 🔮 🪄 💸 🎮 🕹️ 📸 🎬 🎨 ♾️ ☮️ 💤 🗯️ 🔔 🎀",
-  // 👇 more sticker packs — add your own the same way: "tab-emoji":"emoji emoji emoji ..."
-  "✈️":"✈️ 🚗 🚕 🚌 🚲 🛴 ⛵ 🚀 🛸 🗺️ 🧳 🏖️ 🏝️ ⛰️ 🗽 🎡 🎢 🎠 🏰 🕌 🌍 🌎 🌏 🧭",
-  "⚽":"⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🎱 🏓 🏸 🥊 🥋 🎳 ⛳ 🎣 🤿 🏄 🏂 🏆 🥇 🎽 🛹 🏋️ 🚴",
-  "👑":"👑 💍 👒 🎩 🧢 🕶️ 👓 🥽 👗 👠 👜 💄 💅 🧣 🧤 🩱 🩳 👔 🎀 🪭",
-  "🎓":"🎓 📚 ✏️ 💡 🔑 🔒 📱 💻 🎥 📷 🕰️ ⏰ 🧨 🪄 🧿 ♻️ ⚠️ 🚫 💬 🗨️"
-};
-
-/* ═══════════════════ state ═══════════════════ */
-const S = {
-  step:0, mode:"solo", frame:"strip4", look:"warm", timer:3, bg:"#FFF4E4",
-  caption:BOOTH.defaultCaption||"", date:true, mirror:true, facing:"user",
-  frames:[], stickers:[], sel:null, sound:true, lang:"en", theme:"night",
-  cat:"😀", busy:false, gallery:[]
-};
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
-const t = (k,v={}) => { let s=(T[S.lang]&&T[S.lang][k])||T.en[k]||k;
-  for(const p in v) s=s.replace("{"+p+"}",v[p]); return s; };
-
-/* ═══════════════════ chrome ═══════════════════ */
-$("#brandName").textContent = BOOTH.name || "AuraBooth";
-document.title = (BOOTH.name||"AuraBooth") + " — Photo Booth";
-
-function applyLang(){
-  document.documentElement.lang = S.lang;
-  $$("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
-  $$("[data-tp]").forEach(el => el.placeholder = t(el.dataset.tp));
-  buildRail(); buildFrames(); buildTimers(); renderThumbs(); renderSelBar();
-  try{ localStorage.setItem("aurabooth_lang", S.lang);}catch(e){}
-}
-function buildLangMenu(){
-  $("#langMenu").innerHTML = Object.keys(T).map(k =>
-    `<button data-lang="${k}" aria-current="${k===S.lang}">${T[k].name}</button>`).join("");
-}
-$("#langBtn").onclick = e => { e.stopPropagation(); $("#langMenu").classList.toggle("open"); };
-$("#langMenu").onclick = e => { const b=e.target.closest("[data-lang]"); if(!b) return;
-  S.lang=b.dataset.lang; buildLangMenu(); applyLang(); $("#langMenu").classList.remove("open"); };
-document.addEventListener("click",()=>$("#langMenu").classList.remove("open"));
-
-$("#themeBtn").onclick = () => {
-  S.theme = S.theme==="night" ? "day" : "night";
-  document.documentElement.dataset.theme = S.theme==="day" ? "day":"";
-  $("#themeBtn").textContent = S.theme==="night" ? "🌙":"☀️";
-  try{ localStorage.setItem("aurabooth_theme",S.theme);}catch(e){}
-};
-$("#soundBtn").onclick = () => {
-  S.sound=!S.sound; $("#soundBtn").textContent=S.sound?"🔊":"🔇";
-  $("#soundBtn").setAttribute("aria-pressed",S.sound);
-};
-
-function toast(msg,kind=""){
-  const el=document.createElement("div"); el.className="toast "+kind; el.textContent=msg;
-  $("#toasts").appendChild(el);
-  setTimeout(()=>{el.classList.add("fade"); setTimeout(()=>el.remove(),320);},2600);
-}
-
-/* ═══════════════════ step rail ═══════════════════ */
-function buildRail(){
-  $("#rail").innerHTML = T[S.lang].steps.map((label,i)=>{
-    const n=i+1, cls = n===S.step?"active":(n<S.step?"done":"");
-    return `<button class="stepbtn ${cls}" data-go="${n}" ${n>S.step?"disabled":""}>
-      <span class="dot">${n<S.step?"✓":n}</span><span>${label}</span></button>`;
-  }).join("");
-}
-function go(n){
-  n=+n;
-  if(n===2 && !S.frames.length) S.frames = new Array(FRAMES[S.frame].shots).fill(null);
-  if(n>=3 && !S.frames.some(Boolean)) return;
-  S.step=n;
-  $$(".step").forEach(s=>s.classList.remove("on"));
-  $("#step"+n).classList.add("on");
-  $("#rail").style.display = n===0 ? "none" : "flex";
-  buildRail();
-  if(n===3){ drawPreview(); layoutStickers(); }
-  if(n===4){ drawFinal(); }
-  if(n!==2) stopCam();
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-document.addEventListener("click", e=>{
-  const b=e.target.closest("[data-go]"); if(!b||b.disabled) return; go(b.dataset.go);
-});
-
-/* ═══════════════════ step 0 · entrance ═══════════════════ */
-$("#entranceStartBtn").onclick = () => {
-  $("#entranceStartWrap").hidden = true;
-  $("#modePicker").hidden = false;
-  beep(900,.06,.15);
-};
-$("#modePicker").addEventListener("click", e => {
-  const b = e.target.closest(".mode-card"); if(!b) return;
-  if(b.classList.contains("soon")){ toast(t("comingsoon2"),"bad"); return; }
-  S.mode = b.dataset.mode;
-  $$(".mode-card").forEach(m=>m.setAttribute("aria-pressed", String(m===b)));
-});
-
-/* ═══════════════════ step 1 ═══════════════════ */
-function buildFrames(){
-  $("#frames").innerHTML = Object.entries(FRAMES).map(([k,f])=>{
-    const [c,r]=f.mini, cells=Array.from({length:c*r},()=>`<i style="height:${r>2?8:14}px"></i>`).join("");
-    return `<button class="frame" data-frame="${k}" aria-pressed="${k===S.frame}">
-      <div class="mini" style="grid-template-columns:repeat(${c},1fr)">${cells}</div>
-      <b>${f.label}</b><small>${f.shots} ${f.shots>1?"photos":"photo"}</small></button>`;
-  }).join("");
-}
-$("#frames").onclick = e => {
-  const b=e.target.closest("[data-frame]"); if(!b) return;
-  if(b.dataset.frame!==S.frame){ S.frame=b.dataset.frame; S.frames=[]; S.stickers=[]; S.sel=null; }
-  buildFrames();
-};
-
-/* ═══════════════════ chips ═══════════════════ */
-function buildLooks(host){
-  host.innerHTML = Object.entries(LOOKS).map(([k,f])=>
-    `<button class="chip" data-look="${k}" aria-pressed="${k===S.look}">${f.label}</button>`).join("");
-  host.onclick = e => { const b=e.target.closest("[data-look]"); if(!b) return;
-    S.look=b.dataset.look; buildLooks($("#filters2")); buildLooks($("#filters3"));
-    $("#video").style.filter = LOOKS[S.look].css; drawPreview(); renderThumbs(); };
-}
-function buildTimers(){
-  $("#timers").innerHTML=[0,3,5,10].map(n=>
-    `<button class="chip" data-timer="${n}" aria-pressed="${n===S.timer}">${n?t("sec",{n}):t("off")}</button>`).join("");
-}
-$("#timers").onclick = e => { const b=e.target.closest("[data-timer]"); if(!b) return;
-  S.timer=+b.dataset.timer; buildTimers(); };
-
-/* ═══════════════════ audio ═══════════════════ */
-let AC=null;
-function beep(freq=760,dur=.09,vol=.22){
-  if(!S.sound) return;
-  try{
-    AC = AC || new (window.AudioContext||window.webkitAudioContext)();
-    if(AC.state==="suspended") AC.resume();
-    const o=AC.createOscillator(), g=AC.createGain();
-    o.connect(g); g.connect(AC.destination); o.type="sine"; o.frequency.value=freq;
-    g.gain.setValueAtTime(vol,AC.currentTime);
-    g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+dur);
-    o.start(); o.stop(AC.currentTime+dur);
-  }catch(e){}
-}
-const shutter = ()=>{ beep(1100,.05,.2); setTimeout(()=>beep(520,.09,.18),55); };
-
-/* ═══════════════════ camera ═══════════════════ */
-let stream=null, peer=null, activeCall=null, isRemoteSource=false;
-const video=$("#video");
-
-function resetCamUI(){
-  $("#camSrcRow").hidden=false;
-  $("#qrPanel").hidden=true;
-  $("#shootBtn").hidden=true;
-  $("#camtools").hidden=true;
-  $("#camhint").hidden=false;
-  $("#flipBtn").hidden=false;
-}
-function teardownPeer(){
-  if(activeCall){ try{activeCall.close();}catch(e){} activeCall=null; }
-  if(peer){ try{peer.destroy();}catch(e){} peer=null; }
-}
-function useStream(ms,{isRemote=false}={}){
-  stream=ms; isRemoteSource=isRemote;
-  video.srcObject=stream;
-  video.play().catch(()=>{});
-  $("#camhint").hidden=true; $("#camtools").hidden=false;
-  $("#flipBtn").hidden=isRemote;                 // switching lenses only makes sense for this device
-  video.style.filter=LOOKS[S.look].css;
-  if(isRemote) S.mirror=false;                    // guest's phone is already right-way-round
-  video.classList.toggle("mirror",S.mirror);
-  $("#mirrorBtn").setAttribute("aria-pressed",S.mirror);
-  $("#camSrcRow").hidden=true; $("#qrPanel").hidden=true;
-  setShootBtn("shoot"); $("#shootBtn").hidden=false;
-  toast(t("ready"),"good");
-}
-async function startCam(){
-  try{
-    teardownPeer();
-    if(stream) stream.getTracks().forEach(tr=>tr.stop());
-    stream = await navigator.mediaDevices.getUserMedia({audio:false,
-      video:{width:{ideal:1280},height:{ideal:960},facingMode:S.facing}});
-    useStream(stream,{isRemote:false});
-    return true;
-  }catch(err){ console.error(err); toast(t("blocked"),"bad"); resetCamUI(); return false; }
-}
-function stopCam(){
-  if(stream){ stream.getTracks().forEach(tr=>tr.stop()); stream=null; video.srcObject=null; }
-  teardownPeer();
-  resetCamUI();
-}
-$("#mirrorBtn").onclick = () => { S.mirror=!S.mirror;
-  $("#mirrorBtn").setAttribute("aria-pressed",S.mirror); video.classList.toggle("mirror",S.mirror); };
-$("#flipBtn").onclick = async () => { S.facing = S.facing==="user"?"environment":"user"; await startCam(); };
-
-/* ── choose camera source: this device, or another device via QR ── */
-$("#srcThisBtn").onclick = () => startCam();
-$("#srcOtherBtn").onclick = () => openOtherCamPicker();
-$("#qrCancelBtn").onclick = () => { teardownPeer(); resetCamUI(); };
-
-function openOtherCamPicker(){
-  if(typeof Peer==="undefined"){ toast(t("qrerror"),"bad"); return; }
-  teardownPeer();
-  $("#camSrcRow").hidden=true; $("#qrPanel").hidden=false;
-  $("#qrDot").style.display=""; $("#qrStatus").textContent=t("qrwaiting");
-  const code = Math.random().toString(36).slice(2,6).toUpperCase();
-  const joinUrl = location.origin + location.pathname + "?remote=" + code;
-  $("#qrImg").src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(joinUrl);
-  $("#qrCodeText").textContent = code;
-  try{
-    peer = new Peer("aurabooth-"+code);
-    peer.on("call", call=>{
-      activeCall=call;
-      call.answer(); // we don't send our own video back, just receive theirs
-      call.on("stream", remoteStream=>{
-        useStream(remoteStream,{isRemote:true});
-        toast(t("qrconnected"),"good");
-      });
-      call.on("close", ()=>{ if(isRemoteSource) stopCam(); });
-    });
-    peer.on("error", err=>{ console.error(err); toast(t("qrerror"),"bad"); resetCamUI(); });
-  }catch(err){ console.error(err); toast(t("qrerror"),"bad"); resetCamUI(); }
-}
-
-/* ── the page a guest's phone opens after scanning the QR code ── */
-function initRemoteMode(code){
-  document.querySelector(".wrap").hidden=true;
-  $("#remoteView").hidden=false;
-  const rvideo=$("#remoteVideo");
-  $("#remoteStartBtn").onclick = async () => {
-    $("#remoteStartBtn").disabled=true;
-    try{
-      const rs = await navigator.mediaDevices.getUserMedia({audio:false,
-        video:{facingMode:"environment",width:{ideal:1280},height:{ideal:960}}});
-      rvideo.srcObject=rs; await rvideo.play().catch(()=>{});
-      const p = new Peer();
-      p.on("open", ()=>{
-        const call = p.call("aurabooth-"+code, rs);
-        $("#remoteStatus").textContent = t("remoteLive");
-        call.on("close", ()=>{ $("#remoteStartBtn").disabled=false; });
-      });
-      p.on("error", err=>{ console.error(err); $("#remoteStatus").textContent=t("remoteConnErr"); $("#remoteStartBtn").disabled=false; });
-    }catch(err){ console.error(err); $("#remoteStatus").textContent=t("remoteNoCam"); $("#remoteStartBtn").disabled=false; }
-  };
-}
-
-function setShootBtn(mode){
-  const b=$("#shootBtn");
-  b.dataset.mode=mode;
-  if(mode==="start"){ b.textContent=t("startcam"); b.className="btn key wide big"; }
-  if(mode==="shoot"){ b.textContent="📷 "+t("takeshot"); b.className="btn go wide big"; }
-  if(mode==="redo"){  b.textContent="↺ "+t("retakeall"); b.className="btn key wide big"; }
-}
-$("#shootBtn").onclick = async () => {
-  const m=$("#shootBtn").dataset.mode||"start";
-  if(m==="start"){ await startCam(); return; }
-  if(m==="redo"){ S.frames=new Array(FRAMES[S.frame].shots).fill(null); renderThumbs(); }
-  runSequence();
-};
-
-/* ── capture sequence ── */
-async function runSequence(){
-  if(S.busy) return;
-  if(!stream && !(await startCam())) return;
-  S.busy=true; $("#shootBtn").disabled=true;
-  const total = FRAMES[S.frame].shots;
-  if(S.frames.length!==total) S.frames=new Array(total).fill(null);
-  try{
-    for(let i=0;i<total;i++){
-      if(S.frames[i]) continue;
-      $("#shotpill").hidden=false;
-      $("#shotpill").textContent=t("shotof",{a:i+1,b:total});
-      await countdown(S.timer);
-      S.frames[i]=grab();
-      flash(); shutter(); renderThumbs();
-      if(i<total-1) await wait(700);
-    }
-  } finally {
-    $("#shotpill").hidden=true; S.busy=false; $("#shootBtn").disabled=false;
-    const full = S.frames.filter(Boolean).length===total;
-    setShootBtn(full?"redo":"shoot");
-    $("#toDecorate").disabled = !S.frames.some(Boolean);
-    if(full){
-      beep(880,.12,.2); setTimeout(()=>beep(1180,.16,.2),110);
-      if(DISCORD_WEBHOOK){
-        const c = drawStrip(document.createElement("canvas"),{withStickers:false});
-        sendStripToDiscord(c,{silent:true}).then(ok=>{ if(ok) pushGallery(c); });
-      }
-    }
-  }
-}
-async function retakeOne(i){
-  if(S.busy) return;
-  if(!stream && !(await startCam())) return;
-  S.busy=true; $("#shootBtn").disabled=true;
-  $("#shotpill").hidden=false; $("#shotpill").textContent=t("shotof",{a:i+1,b:FRAMES[S.frame].shots});
-  await countdown(S.timer);
-  S.frames[i]=grab(); flash(); shutter(); renderThumbs();
-  $("#shotpill").hidden=true; S.busy=false; $("#shootBtn").disabled=false;
-}
-const wait = ms => new Promise(r=>setTimeout(r,ms));
-async function countdown(secs){
-  const el=$("#count");
-  for(let n=secs;n>0;n--){
-    el.textContent=n; el.classList.remove("on"); void el.offsetWidth; el.classList.add("on");
-    beep(700,.09); await wait(1000);
-  }
-  el.classList.remove("on");
-  if(!secs) await wait(120);
-}
-function flash(){ const f=$("#flash"); f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); }
-
-function grab(){
-  const w=video.videoWidth||1280, h=video.videoHeight||960;
-  const c=document.createElement("canvas"); c.width=w; c.height=h;
-  const x=c.getContext("2d");
-  if(S.mirror){ x.translate(w,0); x.scale(-1,1); }
-  x.drawImage(video,0,0,w,h);
-  return c;
-}
-
-function renderThumbs(){
-  const total=FRAMES[S.frame].shots;
-  const host=$("#thumbs"); host.innerHTML="";
-  for(let i=0;i<total;i++){
-    const d=document.createElement("div");
-    d.className="thumb"+(S.frames[i]?"":" empty");
-    d.innerHTML=`<span class="n">${i+1}</span>`;
-    if(S.frames[i]){
-      const img=new Image(); img.src=S.frames[i].toDataURL("image/jpeg",.7);
-      img.style.filter=LOOKS[S.look].css;
-      d.appendChild(img);
-      const re=document.createElement("button"); re.className="re"; re.textContent=t("retake");
-      re.onclick=()=>retakeOne(i); d.appendChild(re);
-    }
-    host.appendChild(d);
-  }
-}
-
-/* ═══════════════════ strip renderer ═══════════════════ */
-function stripSize(f){
-  return {
-    w: f.pad*2 + f.cols*f.cw + f.gap*(f.cols-1),
-    h: f.pad*2 + f.rows*f.ch + f.gap*(f.rows-1) + f.foot
-  };
-}
-function isDark(hex){
-  const c=hex.replace("#",""); const n=parseInt(c.length===3?c.split("").map(x=>x+x).join(""):c,16);
-  const r=(n>>16)&255,g=(n>>8)&255,b=n&255;
-  return (0.2126*r+0.7152*g+0.0722*b) < 140;
-}
-function roundRect(x,a,b,w,h,r){
-  x.beginPath();
-  if(x.roundRect) x.roundRect(a,b,w,h,r);
-  else{ x.moveTo(a+r,b); x.arcTo(a+w,b,a+w,b+h,r); x.arcTo(a+w,b+h,a,b+h,r);
-        x.arcTo(a,b+h,a,b,r); x.arcTo(a,b,a+w,b,r); x.closePath(); }
-}
-function drawStrip(canvas,{withStickers=false}={}){
-  const f=FRAMES[S.frame], {w,h}=stripSize(f);
-  canvas.width=w; canvas.height=h;
-  const x=canvas.getContext("2d");
-  x.fillStyle=S.bg; x.fillRect(0,0,w,h);
-
-  let i=0;
-  for(let r=0;r<f.rows;r++) for(let c=0;c<f.cols;c++,i++){
-    const px=f.pad+c*(f.cw+f.gap), py=f.pad+r*(f.ch+f.gap);
-    x.save(); roundRect(x,px,py,f.cw,f.ch,10); x.clip();
-    const src=S.frames[i];
-    if(src){
-      const sr=src.width/src.height, dr=f.cw/f.ch;
-      let sw,sh,sx,sy;
-      if(sr>dr){ sh=src.height; sw=sh*dr; sx=(src.width-sw)/2; sy=0; }
-      else     { sw=src.width;  sh=sw/dr; sx=0; sy=(src.height-sh)/2; }
-      x.filter=LOOKS[S.look].css; x.drawImage(src,sx,sy,sw,sh,px,py,f.cw,f.ch); x.filter="none";
-    }else{
-      x.fillStyle=isDark(S.bg)?"rgba(255,255,255,.08)":"rgba(35,26,43,.08)";
-      x.fillRect(px,py,f.cw,f.ch);
-    }
-    x.restore();
-  }
-
-  // footer text
-  const ink = isDark(S.bg) ? "#FFF4E4" : "#231A2B";
-  const cap = (S.caption||"").trim();
-  const baseY = h - f.foot/2 + f.pad/3;
-  x.textAlign="center"; x.fillStyle=ink;
-  if(cap){
-    x.font=`600 ${Math.round(f.foot*0.34)}px Fredoka, Outfit, sans-serif`;
-    x.fillText(cap, w/2, baseY, w-f.pad*2);
-  }
-  if(S.date){
-    const d=new Date(), pad=n=>String(n).padStart(2,"0");
-    x.globalAlpha=.6;
-    x.font=`400 ${Math.round(f.foot*0.19)}px Outfit, sans-serif`;
-    x.fillText(`${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`, w/2, cap?baseY+f.foot*0.28:baseY);
-    x.globalAlpha=1;
-  }
-
-  const stage=canvas.parentElement;
-  if(stage&&stage.classList.contains("strip-stage")){
-    const maxH=Math.max(320,window.innerHeight*0.66);
-    stage.style.width=Math.round(Math.min(w, maxH*(w/h)))+"px";
-    stage.style.maxWidth="100%";
-  }
-
-  if(withStickers){
-    S.stickers.forEach(s=>{
-      const size=s.size*w;
-      x.save();
-      x.translate(s.x*w, s.y*h); x.rotate(s.rot*Math.PI/180);
-      x.font=`${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-      x.textAlign="center"; x.textBaseline="middle";
-      x.fillText(s.emoji,0,0);
-      x.restore();
-    });
-  }
-  return canvas;
-}
-const drawPreview = () => { drawStrip($("#preview")); layoutStickers(); };
-const drawFinal   = () => drawStrip($("#final"),{withStickers:true});
-
-/* ═══════════════════ stickers ═══════════════════ */
-function buildEmoji(){
-  $("#emojiTabs").innerHTML = Object.keys(EMOJI).map(k=>
-    `<button data-cat="${k}" aria-pressed="${k===S.cat}">${k}</button>`).join("");
-  $("#emojiGrid").innerHTML = EMOJI[S.cat].split(" ").filter(Boolean).map(e=>
-    `<button data-e="${e}">${e}</button>`).join("");
-}
-$("#emojiTabs").onclick = e => { const b=e.target.closest("[data-cat]"); if(!b) return;
-  S.cat=b.dataset.cat; buildEmoji(); };
-$("#emojiGrid").onclick = e => {
-  const b=e.target.closest("[data-e]"); if(!b) return;
-  const emoji=b.dataset.e;
-  const cur=S.stickers.find(s=>s.id===S.sel);
-  if(cur){ cur.emoji=emoji; }                       // swap the selected sticker
-  else{
-    const id=Date.now()+Math.random();
-    S.stickers.push({id,emoji,x:.5,y:.5,size:.16,rot:0});
-    S.sel=id;
-  }
-  beep(980,.05,.12); layoutStickers(); renderSelBar();
-};
-
-function layoutStickers(){
-  const stage=$("#stripStage"), cv=$("#preview");
-  stage.querySelectorAll(".stk").forEach(n=>n.remove());
-  const W=cv.clientWidth||cv.width;
-  S.stickers.forEach(s=>{
-    const el=document.createElement("div");
-    el.className="stk"+(s.id===S.sel?" sel":"");
-    el.textContent=s.emoji;
-    el.style.fontSize=(s.size*W)+"px";
-    place(el,s);
-    el.addEventListener("pointerdown",ev=>dragStart(ev,s,el));
-    stage.appendChild(el);
-  });
-}
-function place(el,s){
-  const cv=$("#preview"), W=cv.clientWidth||cv.width, H=cv.clientHeight||cv.height;
-  el.style.left=(s.x*W)+"px"; el.style.top=(s.y*H)+"px";
-  el.style.transform=`translate(-50%,-50%) rotate(${s.rot}deg)`;
-}
-let drag=null;
-function dragStart(ev,s,el){
-  ev.preventDefault();
-  S.sel=s.id;
-  $("#stripStage").querySelectorAll(".stk").forEach(n=>n.classList.remove("sel"));
-  el.classList.add("sel");
-  renderSelBar();
-  const r=$("#preview").getBoundingClientRect();
-  drag={s,el,r};
-  if(el.setPointerCapture) el.setPointerCapture(ev.pointerId);
-  el.addEventListener("pointermove",onDrag);
-  el.addEventListener("pointerup",endDrag);
-  el.addEventListener("pointercancel",endDrag);
-}
-function onDrag(ev){
-  if(!drag) return;
-  const {s,el,r}=drag;
-  s.x=Math.min(1,Math.max(0,(ev.clientX-r.left)/r.width));
-  s.y=Math.min(1,Math.max(0,(ev.clientY-r.top)/r.height));
-  place(el,s);
-}
-function endDrag(ev){
-  if(!drag) return;
-  drag.el.removeEventListener("pointermove",onDrag);
-  drag.el.removeEventListener("pointerup",endDrag);
-  drag.el.removeEventListener("pointercancel",endDrag);
-  drag=null;
-}
-function renderSelBar(){
-  const bar=$("#selBar"), s=S.stickers.find(k=>k.id===S.sel);
-  if(!s){ bar.className="selbar idle"; bar.textContent=t("tapstk"); return; }
-  bar.className="selbar";
-  bar.innerHTML=`<span class="big-e">${s.emoji}</span><span style="flex:1;min-width:110px">${t("swap")}</span>
-    <button class="mini-btn" data-a="sm">➖</button><button class="mini-btn" data-a="lg">➕</button>
-    <button class="mini-btn" data-a="rot">↻</button><button class="mini-btn" data-a="del">🗑️</button>`;
-}
-$("#selBar").onclick = e => {
-  const b=e.target.closest("[data-a]"); if(!b) return;
-  const s=S.stickers.find(k=>k.id===S.sel); if(!s) return;
-  const a=b.dataset.a;
-  if(a==="sm") s.size=Math.max(.05,s.size-.025);
-  if(a==="lg") s.size=Math.min(.55,s.size+.025);
-  if(a==="rot") s.rot=(s.rot+15)%360;
-  if(a==="del"){ S.stickers=S.stickers.filter(k=>k.id!==s.id); S.sel=null; }
-  layoutStickers(); renderSelBar();
-};
-
-/* ═══════════════════ step 3 controls ═══════════════════ */
-function buildSwatches(){
-  $("#swatches").innerHTML = COLORS.map(c=>
-    `<button class="sw" data-c="${c}" style="background:${c}" aria-pressed="${c===S.bg}"></button>`).join("")
-    + `<input type="color" id="customBg" value="${S.bg}" title="Custom colour">`;
-  $("#customBg").oninput = e => { S.bg=e.target.value; buildSwatches(); drawPreview(); };
-}
-$("#swatches").onclick = e => { const b=e.target.closest("[data-c]"); if(!b) return;
-  S.bg=b.dataset.c; buildSwatches(); drawPreview(); };
-$("#caption").oninput = e => { S.caption=e.target.value; drawPreview(); };
-$("#showDate").onchange = e => { S.date=e.target.checked; drawPreview(); };
-window.addEventListener("resize",()=>{ if(S.step===3) layoutStickers(); });
-
-/* ═══════════════════ step 4 ═══════════════════ */
-$("#dlBtn").onclick = () => {
-  const c=drawStrip(document.createElement("canvas"),{withStickers:true});
-  const a=document.createElement("a");
-  a.download=`${(BOOTH.name||"aurabooth").toLowerCase()}-${Date.now()}.png`;
-  a.href=c.toDataURL("image/png"); a.click();
-  beep(900,.1,.18); toast(t("saved"),"good"); pushGallery(c);
-};
-
-if(!DISCORD_WEBHOOK) $("#dcBtn").hidden = true;
-
-async function sendStripToDiscord(canvas,{silent=false}={}){
-  if(!DISCORD_WEBHOOK) return false;
-  try{
-    const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
-    const fd=new FormData();
-    fd.append("file", blob, "aurabooth.png");
-    fd.append("payload_json", JSON.stringify({
-      username: BOOTH.botName || "AuraBooth 📸",
-      content: BOOTH.message || ""
-    }));
-    const res=await fetch(DISCORD_WEBHOOK,{method:"POST",body:fd});
-    if(!res.ok) throw new Error(res.status);
-    if(silent){ toast(t("autosaved"),"good"); }
-    else{ beep(880,.1,.2); setTimeout(()=>beep(1180,.14,.2),110); toast(t("sent"),"good"); }
-    return true;
-  }catch(err){ console.error(err); if(!silent) toast(t("failed"),"bad"); return false; }
-}
-
-$("#dcBtn").onclick = async () => {
-  if(!DISCORD_WEBHOOK){ toast(t("nohook"),"bad"); return; }
-  const btn=$("#dcBtn"); btn.disabled=true; const old=btn.textContent; btn.textContent=t("sending");
-  const c=drawStrip(document.createElement("canvas"),{withStickers:true});
-  const ok=await sendStripToDiscord(c,{silent:false});
-  if(ok) pushGallery(c);
-  btn.disabled=false; btn.textContent=old;
-};
-
-function pushGallery(canvas){
-  const url=canvas.toDataURL("image/jpeg",.6);
-  if(S.gallery.includes(url)) return;
-  S.gallery.unshift(url); S.gallery=S.gallery.slice(0,8);
-  $("#galWrap").hidden=false;
-  $("#gal").innerHTML=S.gallery.map(u=>`<img src="${u}" alt="">`).join("");
-}
-$("#gal").onclick = e => { if(e.target.tagName==="IMG") window.open(e.target.src,"_blank"); };
-
-$("#againBtn").onclick = () => {
-  S.frames=[]; S.stickers=[]; S.sel=null; S.caption=BOOTH.defaultCaption||"";
-  $("#caption").value=S.caption;
-  $("#toDecorate").disabled=true; setShootBtn("start");
-  renderThumbs(); renderSelBar(); go(1);
-};
-
-/* ═══════════════════ boot ═══════════════════ */
-(function init(){
-  const remoteCode = new URLSearchParams(location.search).get("remote");
-  if(remoteCode){ initRemoteMode(remoteCode); return; }   // this device is a guest's second camera
-
-  try{
-    const l=localStorage.getItem("aurabooth_lang"); if(l&&T[l]) S.lang=l;
-    const th=localStorage.getItem("aurabooth_theme");
-    if(th==="day"){ S.theme="day"; document.documentElement.dataset.theme="day"; $("#themeBtn").textContent="☀️"; }
-  }catch(e){}
-  buildLangMenu(); buildLooks($("#filters2")); buildLooks($("#filters3"));
-  buildSwatches(); buildEmoji(); setShootBtn("start"); resetCamUI();
-  applyLang(); renderSelBar();
-  $("#caption").value=S.caption;
-  S.frames=new Array(FRAMES[S.frame].shots).fill(null);
-  renderThumbs();
-  $("#rail").style.display = S.step===0 ? "none" : "flex";
-})();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
